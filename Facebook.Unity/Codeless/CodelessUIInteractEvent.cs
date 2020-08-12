@@ -18,7 +18,7 @@
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -26,84 +26,113 @@ using UnityEngine.SceneManagement;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
+#if ENABLE_INPUT_SYSTEM
+using UnityEngine.InputSystem.UI;
+using UnityEngine.InputSystem;
+#endif
+
 namespace Facebook.Unity
 {
     public class CodelessUIInteractEvent : MonoBehaviour
     {
-
         private FBSDKEventBindingManager eventBindingManager { get; set; }
 
-        void Awake ()
+        void Awake()
         {
-            EventSystem sceneEventSystem = FindObjectOfType<EventSystem> ();
-            if (sceneEventSystem == null) {
-                GameObject eventSystem = new GameObject ("EventSystem");
-                eventSystem.AddComponent<EventSystem> ();
-                eventSystem.AddComponent<StandaloneInputModule> ();
-                DontDestroyOnLoad (eventSystem);
+            EventSystem sceneEventSystem = FindObjectOfType<EventSystem>();
+            if (sceneEventSystem == null)
+            {
+                GameObject eventSystem = new GameObject("EventSystem");
+                eventSystem.AddComponent<EventSystem>();
+
+#if ENABLE_INPUT_SYSTEM
+                eventSystem.AddComponent<InputSystemUIInputModule>();
+#else
+                eventSystem.AddComponent<StandaloneInputModule>();
+#endif
+                DontDestroyOnLoad(eventSystem);
             }
-            switch (Constants.CurrentPlatform) {
-            case FacebookUnityPlatform.Android:
-                SetLoggerInitAndroid ();
-                break;
-            case FacebookUnityPlatform.IOS:
-                SetLoggerInitIos ();
-                break;
-            default:
-                break;
+            switch (Constants.CurrentPlatform)
+            {
+                case FacebookUnityPlatform.Android:
+                    SetLoggerInitAndroid();
+                    break;
+                case FacebookUnityPlatform.IOS:
+                    SetLoggerInitIos();
+                    break;
+                default:
+                    break;
             }
         }
 
-        private static void SetLoggerInitAndroid ()
+        private static void SetLoggerInitAndroid()
         {
-            AndroidJavaObject fetchedAppSettingsManager = new AndroidJavaClass ("com.facebook.internal.FetchedAppSettingsManager");
-            fetchedAppSettingsManager.CallStatic ("setIsUnityInit", true);
+            AndroidJavaObject fetchedAppSettingsManager = new AndroidJavaClass("com.facebook.internal.FetchedAppSettingsManager");
+            fetchedAppSettingsManager.CallStatic("setIsUnityInit", true);
         }
 
-        private static void SetLoggerInitIos ()
+        private static void SetLoggerInitIos()
         {
             //PLACEHOLDER for IOS
         }
 
         // Update is called once per frame
-        void Update ()
+        void Update()
         {
-            if (Input.GetMouseButtonDown (0) || (Input.touchCount > 0 && Input.GetTouch (0).phase == TouchPhase.Began)) {
-                try {
-                    if (EventSystem.current.IsPointerOverGameObject () ||
-                        (Input.touchCount > 0 && EventSystem.current.IsPointerOverGameObject (Input.touches [0].fingerId))
-                        ) {
-                        if (null != EventSystem.current.currentSelectedGameObject) {
+#if ENABLE_INPUT_SYSTEM
+            if ((Mouse.current != null && Mouse.current.leftButton.isPressed) || 
+                (Touchscreen.current != null && Touchscreen.current.primaryTouch.IsPressed() && !Touchscreen.current.primaryTouch.IsActuated())
+                )
+#else
+            if (Input.GetMouseButtonDown(0) || (Input.touchCount > 0 && Input.GetTouch(0).phase == TouchPhase.Began))
+#endif
+            {
+                try
+                {
+                    if (EventSystem.current.IsPointerOverGameObject()
+#if ENABLE_INPUT_SYSTEM != true
+                        || (Input.touchCount > 0 && EventSystem.current.IsPointerOverGameObject(Input.touches[0].fingerId))
+#endif
+                        )
+                    {
+                        if (null != EventSystem.current.currentSelectedGameObject)
+                        {
                             string name = EventSystem.current.currentSelectedGameObject.name;
                             GameObject go = EventSystem.current.currentSelectedGameObject;
-                            if (null != go.GetComponent<UnityEngine.UI.Button> () &&
-                                null != eventBindingManager) {
+                            if (null != go.GetComponent<UnityEngine.UI.Button>() &&
+                                null != eventBindingManager)
+                            {
 
                                 var eventBindings = eventBindingManager.eventBindings;
                                 FBSDKEventBinding matchedBinding = null;
-                                if (null != eventBindings) {
-                                  foreach(var eventBinding in eventBindings) {
-                                      if (FBSDKViewHiearchy.CheckGameObjectMatchPath(go, eventBinding.path)) {
-                                          matchedBinding = eventBinding;
-                                          break;
-                                      }
-                                  }
+                                if (null != eventBindings)
+                                {
+                                    foreach (var eventBinding in eventBindings)
+                                    {
+                                        if (FBSDKViewHiearchy.CheckGameObjectMatchPath(go, eventBinding.path))
+                                        {
+                                            matchedBinding = eventBinding;
+                                            break;
+                                        }
+                                    }
                                 }
 
-                                if (null != matchedBinding) {
+                                if (null != matchedBinding)
+                                {
                                     FB.LogAppEvent(matchedBinding.eventName);
                                 }
                             }
                         }
                     }
                 }
-                catch (Exception) {
+                catch (Exception)
+                {
                     return;
                 }
             }
         }
 
-        public void OnReceiveMapping (string message)
+        public void OnReceiveMapping(string message)
         {
             var dict = MiniJSON.Json.Deserialize(message) as List<System.Object>;
             this.eventBindingManager = new FBSDKEventBindingManager(dict);
